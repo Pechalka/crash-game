@@ -1,0 +1,207 @@
+* {
+  box-sizing: border-box;
+  user-select: none;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(145deg, #0b0f1a 0%, #0a0e17 100%);
+  font-family: 'Segoe UI', 'Roboto', 'Inter', sans-serif;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+}
+
+.app {
+  width: 1200px;
+  max-width: 95%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  background: rgba(18, 25, 45, 0.6);
+  backdrop-filter: blur(8px);
+  border-radius: 2rem;
+  padding: 1.5rem;
+  box-shadow: 0 20px 35px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Левая панель (таблица) */
+.history-panel {
+  background: #0b0f18aa;
+  border-radius: 1.2rem;
+  padding: 1rem;
+  backdrop-filter: blur(4px);
+  overflow-x: auto;
+}
+
+.history-panel h3 {
+  margin: 0 0 0.8rem 0;
+  font-weight: 500;
+  color: #ffd966;
+  text-align: center;
+}
+
+.table-wrapper {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+th, td {
+  padding: 0.6rem 0.4rem;
+  border-bottom: 1px solid #2a3a4e;
+  text-align: center;
+}
+
+th {
+  color: #ffd966;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+td {
+  color: #cfdfef;
+}
+
+tbody tr:hover {
+  background: #ffffff0d;
+}
+
+/* Правая панель (игровая) */
+.game-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.8rem;
+}
+
+.balance {
+  font-size: 1.6rem;
+  font-weight: bold;
+  background: #00000055;
+  display: inline-block;
+  padding: 0.4rem 1.2rem;
+  border-radius: 40px;
+  backdrop-filter: blur(4px);
+  color: #f0f3fa;
+  letter-spacing: 0.5px;
+  border: 1px solid #ffd96633;
+}
+
+.multiplier {
+  font-size: 5rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, #FFD966, #FFA41F);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 20px #ffb34755;
+  margin: 0.2rem 0;
+}
+
+.message {
+  background: #00000066;
+  border-radius: 30px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  width: 100%;
+  text-align: center;
+  color: #ddd;
+  min-height: 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.controls {
+  display: flex;
+  gap: 0.8rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin: 0.5rem 0;
+}
+
+.controls input {
+  background: #1e2a3a;
+  border: 1px solid #3a4c62;
+  border-radius: 40px;
+  padding: 0.7rem 1rem;
+  font-size: 1rem;
+  width: 110px;
+  text-align: center;
+  font-weight: bold;
+  color: #fff;
+  outline: none;
+}
+
+.controls input:focus {
+  border-color: #ffb347;
+  box-shadow: 0 0 8px #ffb34755;
+}
+
+.controls button {
+  background: linear-gradient(95deg, #2c3e5c, #1e2f44);
+  border: none;
+  border-radius: 40px;
+  padding: 0.7rem 1.8rem;
+  font-weight: bold;
+  font-size: 1rem;
+  color: #ecf0f1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px #00000033;
+}
+
+.controls button:active {
+  transform: scale(0.97);
+}
+
+.controls button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.controls button:first-of-type {
+  background: linear-gradient(95deg, #1f6392, #0e4b70);
+}
+
+.controls button:last-of-type {
+  background: linear-gradient(95deg, #9e6d2b, #7a4f1a);
+}
+
+@media (max-width: 800px) {
+  .app {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+.user-id {
+  font-size: 0.9rem;
+  background: #1e2a3a;
+  display: inline-block;
+  padding: 0.2rem 1rem;
+  border-radius: 30px;
+  color: #ffd966;
+  margin-bottom: 0.5rem;
+}
+
+/* Предыдущие стили (из App.css, которые вы давали ранее) остаются, плюс добавляем: */
+.countdown {
+  background: #1e2a3a;
+  border-radius: 30px;
+  padding: 0.3rem 1rem;
+  margin: 0.5rem 0;
+  font-size: 1rem;
+  color: #ffd966;
+  display: inline-block;
+}

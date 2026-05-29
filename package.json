@@ -1,0 +1,15 @@
+{
+  "name": "crash-game",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:backend": "pnpm --filter backend start",
+    "dev:rounds": "pnpm --filter backend rounds",
+    
+    "dev:frontend": "pnpm --filter frontend dev",
+    "dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\" \"pnpm run dev:rounds\""
+  },
+  "devDependencies": {
+    "concurrently": "8.2.2"
+  }
+}
