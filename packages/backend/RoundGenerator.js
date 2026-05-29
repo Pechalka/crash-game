@@ -2,6 +2,7 @@
 const redis = require('redis');
 const { getEmitter } = require('./socket-io-setup');
 const GameService = require('./GameService');
+const { createBullQueue } = require('./queue');
 
 const config = {
   bettingDuration: 7000,
@@ -14,12 +15,19 @@ const config = {
 
 let gameService, emitter, redisClient;
 let roundActive = false;
-let bettingTimer = null, flightInterval = null, nextRoundTimeout = null;
+let bettingTimer = null,
+  flightInterval = null,
+  nextRoundTimeout = null;
 let currentCrashPoint = null;
+let currentRoundId;
+let resolveRoundQueue;
 
 function generateCrashPoint() {
   const r = Math.random();
-  const point = config.minCrashPoint + Math.pow(r, config.distributionPower) * (config.maxCrashPoint - config.minCrashPoint);
+  const point =
+    config.minCrashPoint +
+    Math.pow(r, config.distributionPower) *
+      (config.maxCrashPoint - config.minCrashPoint);
   return Math.min(config.maxCrashPoint, Math.max(config.minCrashPoint, point));
 }
 
@@ -28,7 +36,7 @@ async function startRound() {
   roundActive = true;
   currentCrashPoint = generateCrashPoint();
 
-  await gameService.startRound(currentCrashPoint, config.bettingDuration);
+  currentRoundId = await gameService.startRound(currentCrashPoint, config.bettingDuration);
   emitter.emit('game_event', {
     type: 'betting_start',
     duration: Math.floor(config.bettingDuration / 1000),
@@ -68,12 +76,20 @@ async function crash() {
   await gameService.crashRound(currentCrashPoint, config.cooldownDuration);
   emitter.emit('game_event', { type: 'crash', value: currentCrashPoint });
   roundActive = false;
+
+    // Добавляем задачу на разрешение раунда (проигрыши)
+  await resolveRoundQueue.add({ roundId: currentRoundId });
+
   nextRoundTimeout = setTimeout(() => startRound(), config.cooldownDuration);
 }
 
 async function main() {
+  resolveRoundQueue = createBullQueue('resolve-round-queue');
+
   emitter = await getEmitter();
-  redisClient = redis.createClient({ url: process.env.REDIS_URL || 'redis://localhost:6379' });
+  redisClient = redis.createClient({
+    url: process.env.REDIS_URL || 'redis://localhost:6379',
+  });
   await redisClient.connect();
   gameService = new GameService(redisClient);
   console.log('[Generator] Started');

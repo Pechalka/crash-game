@@ -5,6 +5,7 @@
   "scripts": {
     "dev:backend": "pnpm --filter backend start",
     "dev:rounds": "pnpm --filter backend rounds",
+    "dev:api_calls": "pnpm --filter backend api_calls",
     
     "dev:frontend": "pnpm --filter frontend dev",
     "dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\" \"pnpm run dev:rounds\""

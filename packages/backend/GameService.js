@@ -8,9 +8,30 @@ class GameService {
     this.cashOutScript = cashOutScript;
   }
 
+  // метод для получения результата раунда ставки и кешауты
+  async getRoundData(roundId) {
+    const bets = await this.redis.hGetAll(`round:${roundId}:bets`);
+    const cashouts = await this.redis.hGetAll(`round:${roundId}:cashouts`);
+    // Преобразуем строки в числа (значения приходят как строки)
+    const betsNum = {};
+    for (const [userId, amount] of Object.entries(bets)) {
+      betsNum[userId] = parseFloat(amount);
+    }
+    const cashoutsNum = {};
+    for (const [userId, win] of Object.entries(cashouts)) {
+      cashoutsNum[userId] = parseFloat(win);
+    }
+    return { bets: betsNum, cashouts: cashoutsNum };
+  }
+
   // ---------- Атомарные операции (Lua) ----------
-  async placeBet(userId, betAmount, userName) {
+  async placeBet(userId, betAmount, userName, roundId) {
     if (!userId) return { success: false, reason: 'guest' };
+    if (!roundId) {
+      roundId = await this.redis.get('game:current_round');
+      if (!roundId) return { success: false, reason: 'no_round' };
+    }
+    const betId = `${roundId}:${userId}`;
 
     const res = await this.redis.eval(this.placeBetScript, {
       arguments: [
@@ -22,20 +43,25 @@ class GameService {
     });
 
     if (res && res[0] === 1) {
-      return { success: true, newBalance: res[1] };
+      return { success: true, newBalance: res[1], betId, roundId };
     }
     return { success: false, reason: res?.[1] || 'unknown' };
   }
 
-  async cashOut(userId) {
+  async cashOut(userId, roundId) {
     if (!userId) return { success: false, reason: 'guest' };
+    if (!roundId) {
+      roundId = await this.redis.get('game:current_round');
+      if (!roundId) return { success: false, reason: 'no_round' };
+    }
+    const betId = `${roundId}:${userId}`;
 
     const res = await this.redis.eval(this.cashOutScript, {
       arguments: [userId, Date.now().toString()],
     });
 
     if (res && res[0] === 1) {
-      return { success: true, newBalance: res[1], win: res[2] };
+      return { success: true, newBalance: res[1], win: res[2], betId, roundId };
     }
     return { success: false, reason: res?.[1] || 'unknown' };
   }

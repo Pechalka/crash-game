@@ -1,5 +1,7 @@
+const { v4: uuidv4 } = require('uuid');
+
 // socketApi.js
-const initSoketApi = (io, { gameService, userService }) => {
+const initSoketApi = (io, { gameService, userService, betQueue, cashoutQueue }) => {
   io.on('connection', async (socket) => {
     let userId = socket.handshake.query.userId;
     if (!userId || userId === 'undefined' || userId === 'null') userId = null;
@@ -20,6 +22,7 @@ const initSoketApi = (io, { gameService, userService }) => {
       }
 
       const result = await gameService.placeBet(userId, amount, userInfo.name);
+
       if (!result.success) {
         let msg = 'Cannot bet';
         if (result.reason === 'balance') msg = 'Insufficient balance';
@@ -29,6 +32,16 @@ const initSoketApi = (io, { gameService, userService }) => {
         else if (result.reason === 'guest') msg = 'Guest cannot bet';
         return socket.emit('error', msg);
       }
+
+      // Добавляем задачу в очередь (не ждём)
+      betQueue.add({
+        userId,
+        betId: result.betId,
+        amount,
+        roundId: result.roundId,
+        idempotencyKey: uuidv4(),
+      }).catch(err => console.error('Failed to add bet to queue', err));
+      
 
       socket.emit('balance_update', { balance: result.newBalance });
       socket.emit('bet_accepted', { amount });
@@ -50,6 +63,14 @@ const initSoketApi = (io, { gameService, userService }) => {
         else if (result.reason === 'guest') msg = 'Guest cannot cashout';
         return socket.emit('error', msg);
       }
+
+      cashoutQueue.add({
+        userId,
+        betId: result.betId,
+        winAmount: result.win,
+        roundId: result.roundId,
+        idempotencyKey: uuidv4(),
+      }).catch(err => console.error('Failed to add cashout to queue', err));
 
       socket.emit('balance_update', { balance: result.newBalance });
       socket.emit('cashout_success', { win: result.win });

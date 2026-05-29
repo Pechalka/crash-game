@@ -10,6 +10,7 @@ const GameService = require('./GameService');
 const UserService = require('./UserService');
 const { initRediceAdapter, createServer } = require('./socket-io-setup');
 const { initSoketApi } = require('./socketApi');
+const { createBullQueue } = require('./queue');
 
 const app = express();
 app.use(express.json());
@@ -23,6 +24,8 @@ initRediceAdapter(io).then(async () => {
 
   const gameService = new GameService(redisClient);
   const userService = new UserService(redisClient);
+  const betQueue = createBullQueue('bet-queue');
+  const cashoutQueue = createBullQueue('cashout-queue');
 
   // REST: создание тестовых пользователей
   app.get('/api/test-users', async (req, res) => {
@@ -37,7 +40,7 @@ initRediceAdapter(io).then(async () => {
     res.json({ message: 'Test users created', users: testUsers });
   });
 
-  initSoketApi(io, { gameService, userService });
+  initSoketApi(io, { gameService, userService, betQueue, cashoutQueue  });
 
   const PORT = process.env.PORT || 3001;
   server.listen(PORT, () => {
