@@ -1,67 +1,62 @@
-
-
-const initSoketApi =  (io, { gameService, userService }) => {
+// socketApi.js
+const initSoketApi = (io, { gameService, userService }) => {
   io.on('connection', async (socket) => {
     let userId = socket.handshake.query.userId;
-    if (!userId || userId === 'undefined' || userId === 'null') {
-      userId = null;
-    }
+    if (!userId || userId === 'undefined' || userId === 'null') userId = null;
     socket.data.userId = userId;
 
-    const { balance, name, exists } = await userService.getUserById(userId);
-    const gameState = await gameService.getGameState(userId); // получаем состояние игры
+    const userInfo = await userService.getUserInfo(userId);
+    const gameState = await gameService.getGameState(userId);
 
-    // Отправляем одним событием пользователя и состояние игры
-    socket.emit('user_info', {
-      user: { balance, name, exists },
-      game: gameState,
-    });
+    socket.emit('user_info', { user: userInfo, game: gameState });
 
-    console.log(
-      `[Socket] Connected: userId=${userId}, name=${name}, exists=${exists}`,
-    );
-
-    // --- Обработчики bet / cashout пока пустые (добавим позже) ---
+    // ----- BET -----
     socket.on('bet', async ({ amount }) => {
-      const user = await userService.getUserById(userId);
+      if (!userInfo.exists) {
+        return socket.emit('error', 'Guest cannot bet');
+      }
+      if (amount <= 0) {
+        return socket.emit('error', 'Invalid amount');
+      }
 
-      if (!user) return socket.emit('error', 'User not found');
-      const ok = await gameService.registerBet(userId, amount, user.name);
-      if (!ok) return socket.emit('error', 'Cannot bet');
+      const result = await gameService.placeBet(userId, amount, userInfo.name);
+      if (!result.success) {
+        let msg = 'Cannot bet';
+        if (result.reason === 'balance') msg = 'Insufficient balance';
+        else if (result.reason === 'phase') msg = 'Betting phase is over';
+        else if (result.reason === 'time') msg = 'Betting phase is over';
+        else if (result.reason === 'duplicate') msg = 'Bet already placed';
+        else if (result.reason === 'guest') msg = 'Guest cannot bet';
+        return socket.emit('error', msg);
+      }
 
-      const balance = await userService.updateBalance(userId, -amount);
-
-      socket.emit('balance_update', { balance });
-      socket.emit('bet_accepted', { amount }); // ← вот здесь
+      socket.emit('balance_update', { balance: result.newBalance });
+      socket.emit('bet_accepted', { amount });
     });
 
+    // ----- CASHOUT -----
     socket.on('cashout', async () => {
-      const user = await userService.getUserById(userId);
+      if (!userInfo.exists) {
+        return socket.emit('error', 'Guest cannot cashout');
+      }
 
-      if (!user) return socket.emit('error', 'User not found');
+      const result = await gameService.cashOut(userId);
+      if (!result.success) {
+        let msg = 'Cannot cashout';
+        if (result.reason === 'no_bet') msg = 'No bet placed';
+        else if (result.reason === 'phase') msg = 'Cannot cashout now';
+        else if (result.reason === 'duplicate') msg = 'Already cashed out';
+        else if (result.reason === 'crashed') msg = 'Game crashed';
+        else if (result.reason === 'guest') msg = 'Guest cannot cashout';
+        return socket.emit('error', msg);
+      }
 
-      const betAmount = await gameService.getBet(userId);
-      if (!betAmount) return socket.emit('error', 'No bet placed');
-
-      const multiplier = await gameService.getCurrentMultiplier();
-      const win = betAmount * multiplier;
-
-      const ok = await gameService.registerCashout(
-        userId,
-        win,
-        multiplier,
-        user.name,
-      );
-      if (!ok) return socket.emit('error', 'Cannot cashout');
-
-      const balance = await userService.updateBalance(userId, +win);
-
-      socket.emit('balance_update', { balance });
-      socket.emit('cashout_success', { win });
+      socket.emit('balance_update', { balance: result.newBalance });
+      socket.emit('cashout_success', { win: result.win });
     });
 
     socket.on('disconnect', () => {
-      console.log(`[Socket] Disconnected: ${userId || 'anonymous'}`);
+      console.log(`[Socket] Disconnected: ${userId || 'guest'}`);
     });
   });
 };

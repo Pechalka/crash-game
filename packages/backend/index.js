@@ -1,3 +1,4 @@
+// index.js
 const path = require('path');
 const dotenv = require('dotenv');
 dotenv.config({ path: path.join(process.cwd(), '.env') });
@@ -22,11 +23,25 @@ initRediceAdapter(io).then(async () => {
 
   const gameService = new GameService(redisClient);
   const userService = new UserService(redisClient);
-  // init services if need
+
+  // REST: создание тестовых пользователей
+  app.get('/api/test-users', async (req, res) => {
+    const testUsers = [
+      { id: '1', name: 'Alice', balance: 1000 },
+      { id: '2', name: 'Bob', balance: 5000 },
+      { id: '3', name: 'Charlie', balance: 2000 }
+    ];
+    for (const u of testUsers) {
+      await userService.createTestUser(u.id, u.name, u.balance);
+    }
+    res.json({ message: 'Test users created', users: testUsers });
+  });
+
   initSoketApi(io, { gameService, userService });
 
   const PORT = process.env.PORT || 3001;
   server.listen(PORT, () => {
     console.log(`Backend running on http://localhost:${PORT}`);
+    console.log(`Test users endpoint: GET http://localhost:${PORT}/api/test-users`);
   });
 });

@@ -1,45 +1,31 @@
-// ---- Хранилище пользователей (в памяти) ----
-const players = {
-  1: { balance: 1000, name: 'Alice' },
-  2: { balance: 5000, name: 'Bob' },
-  3: { balance: 2000, name: 'Charlie' },
-};
-
+// UserService.js
 class UserService {
   constructor(redisClient) {
     this.redis = redisClient;
   }
 
-  getUserById = (userId) => {
-    let name = 'Guest';
-    let balance = 0;
-    let exists = false;
-
-    const userInfo = players[userId] || null;
-
-    if (userId && userInfo) {
-      exists = true;
-      name = userInfo.name;
-      balance = userInfo.balance;
-    } else if (userId) {
-      // userId передан, но не существует
-      exists = false;
-      name = 'Guest';
-      balance = 0;
-    } else {
-      // userId отсутствует
-      exists = false;
-      name = 'Guest (no id)';
-      balance = 0;
+  // Получение информации о пользователе (всегда возвращает объект, даже если не существует)
+  async getUserInfo(userId) {
+    if (!userId || userId === 'undefined' || userId === 'null') {
+      return { exists: false, name: 'Guest', balance: 0 };
     }
+    const balance = await this.redis.get(`user:${userId}:balance`);
+    if (balance === null) {
+      return { exists: false, name: 'Guest', balance: 0 };
+    }
+    const name = await this.redis.get(`user:${userId}:name`) || `User${userId}`;
+    return { exists: true, name, balance: parseFloat(balance) };
+  }
 
-    return { exists, name, balance };
-  };
-
-  updateBalance(userId, amount) {
-    players[userId].balance += amount;
-
-    return players[userId].balance; 
+  // Создание тестового пользователя (если ещё не существует)
+  async createTestUser(userId, name, initialBalance) {
+    const exists = await this.redis.exists(`user:${userId}:balance`);
+    if (!exists) {
+      await this.redis.set(`user:${userId}:balance`, initialBalance);
+      await this.redis.set(`user:${userId}:name`, name);
+      console.log(`[UserService] Created test user: ${userId} (${name}) with balance ${initialBalance}`);
+    }
+    return { userId, name, balance: initialBalance };
   }
 }
 

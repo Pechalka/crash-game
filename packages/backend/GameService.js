@@ -1,201 +1,162 @@
+const { placeBetScript, cashOutScript } = require('./scripts');
+
 // GameService.js
 class GameService {
   constructor(redisClient) {
     this.redis = redisClient;
+    this.placeBetScript = placeBetScript;
+    this.cashOutScript = cashOutScript;
   }
 
-  async startRound(roundId, crashPoint, bettingDurationMs) {
-    const oldRoundId = await this.redis.get('current_round');
-    if (oldRoundId && oldRoundId !== roundId) {
-      await this.redis.del(`round:${oldRoundId}:bets`);
-      await this.redis.del(`round:${oldRoundId}:cashouts`);
+  // ---------- Атомарные операции (Lua) ----------
+  async placeBet(userId, betAmount, userName) {
+    if (!userId) return { success: false, reason: 'guest' };
+
+    const res = await this.redis.eval(this.placeBetScript, {
+      arguments: [
+        userId,
+        betAmount.toString(),
+        Date.now().toString(),
+        userName,
+      ],
+    });
+
+    if (res && res[0] === 1) {
+      return { success: true, newBalance: res[1] };
     }
-    await this.redis.set('current_round', roundId);
-    await this.redis.set('crash_point', crashPoint);
-    await this.redis.set('current_multiplier', 1.0);
-    await this.redis.set('current_phase', 'betting');
-    await this.redis.set('betting_end_time', Date.now() + bettingDurationMs);
-    await this.redis.del('cooldown_end_time');
-
-    await this.resetPlayerStates();
-    console.log(`[GameService] Round ${roundId} started`);
+    return { success: false, reason: res?.[1] || 'unknown' };
   }
 
-  async startFlight(roundId) {
-    await this.redis.set('current_phase', 'flying');
-    await this.redis.del('betting_end_time');
-    console.log(`[GameService] Flight started for round ${roundId}`);
+  async cashOut(userId) {
+    if (!userId) return { success: false, reason: 'guest' };
+
+    const res = await this.redis.eval(this.cashOutScript, {
+      arguments: [userId, Date.now().toString()],
+    });
+
+    if (res && res[0] === 1) {
+      return { success: true, newBalance: res[1], win: res[2] };
+    }
+    return { success: false, reason: res?.[1] || 'unknown' };
   }
 
-  async updateMultiplier(roundId, multiplier) {
-    await this.redis.set('current_multiplier', multiplier);
-  }
+  // ---------- Чтение состояния игры ----------
+  async getGameState(userId) {
+    const roundId = await this.redis.get('game:current_round');
+    if (!roundId) {
+      return {
+        phase: 'betting',
+        multiplier: 1.0,
+        hasBet: false,
+        hasCashedOut: false,
+        betAmount: null,
+        remainingBettingTime: 0,
+      };
+    }
 
-  async crashRound(roundId, finalMultiplier) {
-    await this.redis.set('current_phase', 'crashed');
-    await this.redis.set('current_multiplier', finalMultiplier);
-    const cooldownDurationMs = 7 * 1000;
-    const cooldownEndTime = Date.now() + cooldownDurationMs;
-    await this.redis.set('cooldown_end_time', cooldownEndTime);
-    console.log(`[GameService] Round ${roundId} crashed, cooldown until ${new Date(cooldownEndTime).toISOString()}`);
-  }
+    // Получаем фазу и множитель
+    const phase = (await this.redis.get('game:phase')) || 'betting';
+    const multiplier = parseFloat(
+      (await this.redis.get('game:multiplier')) || 1.0,
+    );
 
-  async getCurrentMultiplier() {
-    const val = await this.redis.get('current_multiplier');
-    return val ? parseFloat(val) : 1.0;
-  }
+    // Если userId нет (гость), пропускаем проверку ставок
+    let betAmount = null;
+    let hasCashedOut = false;
+    if (userId) {
+      const betsKey = `round:${roundId}:bets`;
+      const cashoutsKey = `round:${roundId}:cashouts`;
+      // Одновременно получаем оба значения (можно через multi, но оставим последовательно для простоты)
+      betAmount = await this.redis.hGet(betsKey, userId);
+      hasCashedOut = await this.redis.hExists(cashoutsKey, userId);
+    }
 
-  async getCurrentPhase() {
-    const phase = await this.redis.get('current_phase');
-    return phase || 'betting';
-  }
+    let remainingBettingTime = 0;
+    if (phase === 'betting') {
+      const bettingEnd = await this.redis.get('game:betting_end_time');
+      if (bettingEnd) {
+        remainingBettingTime = Math.max(0, parseInt(bettingEnd) - Date.now());
+      }
+    }
 
-async getGameState(userId) {
-  const roundId = await this.redis.get('current_round');
-  if (!roundId) {
     return {
-      phase: 'betting',
-      multiplier: 1.0,
-      hasBet: false,
-      hasCashedOut: false,
-      betAmount: null,
-      remainingBettingTime: 0,
+      phase,
+      multiplier,
+      hasBet: betAmount !== null,
+      hasCashedOut,
+      betAmount: betAmount ? parseFloat(betAmount) : null,
+      remainingBettingTime,
     };
   }
-  const phase = (await this.redis.get('current_phase')) || 'betting';
-  const multiplier = parseFloat((await this.redis.get('current_multiplier')) || 1.0);
-  const betAmount = await this.getBet(userId);
-  const hasBet = betAmount !== null;
-  const hasCashedOut = await this.hasCashedOut(userId);
 
-  let remainingBettingTime = 0;
-  if (phase === 'betting') {
-    const bettingEnd = await this.redis.get('betting_end_time');
-    if (bettingEnd) {
-      remainingBettingTime = Math.max(0, parseInt(bettingEnd) - Date.now());
-    }
-  }
-
-  return {
-    phase,
-    multiplier,
-    hasBet,
-    hasCashedOut,
-    betAmount,
-    remainingBettingTime,   
-  };
-}
-
-  async registerBet(userId, betAmount, userName) {
-    const roundId = await this.redis.get('current_round');
-    if (!roundId) return false;
-    const betsKey = `round:${roundId}:bets`;
-    const existing = await this.redis.hGet(betsKey, userId);
-    if (existing) return false;
-    await this.redis.hSet(betsKey, userId, betAmount);
-    await this.updatePlayerState(userId, 'bet', userName, betAmount);
-    return true;
-  }
-
-  async registerCashout(userId, win, multiplier, userName) {
-    const roundId = await this.redis.get('current_round');
-    if (!roundId) return false;
-    const cashoutsKey = `round:${roundId}:cashouts`;
-    const existing = await this.redis.hExists(cashoutsKey, userId);
-    if (existing) return false;
-    const betAmount = await this.getBet(userId);
-    if (!betAmount) return false;
-    await this.redis.hSet(cashoutsKey, userId, win);
-    await this.updatePlayerState(userId, 'cashout', userName, betAmount, win, multiplier);
-    return true;
-  }
-
-  async getBet(userId) {
-    const roundId = await this.redis.get('current_round');
-    if (!roundId) return null;
-    const betsKey = `round:${roundId}:bets`;
-    const bet = await this.redis.hGet(betsKey, userId);
-    return bet ? parseFloat(bet) : null;
-  }
-
-  async hasCashedOut(userId) {
-    const roundId = await this.redis.get('current_round');
-    if (!roundId) return false;
-    const cashoutsKey = `round:${roundId}:cashouts`;
-    return await this.redis.hExists(cashoutsKey, userId);
-  }
-
-  async updatePlayerState(userId, type, userName, betAmount = null, win = null, multiplier = null) {
-    const stateKey = `player_state:${userId}`;
-    const now = Date.now();
-
-    let state = await this.redis.hGetAll(stateKey);
-    if (!state || Object.keys(state).length === 0) {
-      state = { name: userName, timestamp: now.toString() };
-    }
-
-    if (type === 'bet') {
-      state.betAmount = betAmount !== null ? betAmount.toString() : null;
-      state.win = null;
-      state.multiplier = null;
-    } else if (type === 'cashout') {
-      if (state.betAmount) {
-        state.win = win !== null ? win.toString() : null;
-        state.multiplier = multiplier !== null ? multiplier.toString() : null;
-      }
-    }
-    state.timestamp = now.toString();
-
-    const args = [];
-    for (const [key, val] of Object.entries(state)) {
-      if (val !== null && val !== undefined) {
-        args.push(key, val);
-      }
-    }
-    if (args.length) {
-      await this.redis.hSet(stateKey, args);
-    }
-
-    await this.redis.zAdd('player_index', { score: now, value: userId });
-    const count = await this.redis.zCard('player_index');
-    if (count > 50) {
-      const oldest = await this.redis.zRange('player_index', 0, 0);
-      if (oldest && oldest.length) {
-        await this.redis.zRem('player_index', oldest[0]);
-        await this.redis.del(`player_state:${oldest[0]}`);
-      }
-    }
-  }
-
-  async getPlayerStates(limit = 50) {
-    let userIds = await this.redis.zRange('player_index', 0, limit - 1, { REV: true });
-
-    const states = [];
+  async getLiveTable(limit = 50) {
+    const userIds = await this.redis.zRange('live:index', 0, limit - 1, {
+      REV: true,
+    });
+    const table = [];
     for (const userId of userIds) {
-      const data = await this.redis.hGetAll(`player_state:${userId}`);
-      if (Object.keys(data).length) {
-        states.push({
+      const data = await this.redis.hGetAll(`live:state:${userId}`);
+      if (data && Object.keys(data).length) {
+        table.push({
           userId,
-          name: data.name,
+          name: data.name || 'Guest',
           betAmount: parseFloat(data.betAmount || 0),
           win: data.win ? parseFloat(data.win) : null,
           multiplier: data.multiplier ? parseFloat(data.multiplier) : null,
         });
       }
     }
-    return states;
+    return table;
   }
 
-async resetPlayerStates() {
-  const keys = await this.redis.keys('player_state:*');
-  console.log(`[GameService] resetPlayerStates: found ${keys.length} keys`);
-  if (keys && keys.length) {
-    await this.redis.del(keys);
-    console.log(`[GameService] resetPlayerStates: deleted ${keys.length} keys`);
-  }
-  await this.redis.del('player_index');
-}
+  // ---------- Методы для генератора ----------
+  async startRound(crashPoint, bettingDurationMs) {
+    const roundId = Date.now().toString();
+    await this.redis.set('game:current_round', roundId);
+    await this.redis.set('game:crash_point', crashPoint);
+    await this.redis.set('game:multiplier', 1.0);
+    await this.redis.set('game:phase', 'betting');
+    await this.redis.set(
+      'game:betting_end_time',
+      Date.now() + bettingDurationMs,
+    );
+    await this.redis.del('game:cooldown_end_time');
 
+    // Очистка live table
+    const lua = `
+    local keys = redis.call('keys', 'live:state:*')
+    if #keys > 0 then
+      redis.call('del', unpack(keys))
+    end
+    redis.call('del', 'live:index')
+    return 1
+  `;
+    await this.redis.eval(lua);
+    console.log(
+      `[GameService] Round ${roundId} started, crash point ${crashPoint}`,
+    );
+    return roundId;
+  }
+
+  async startFlight() {
+    await this.redis.set('game:phase', 'flying');
+    await this.redis.del('game:betting_end_time');
+    console.log('[GameService] Flight started');
+  }
+
+  async updateMultiplier(multiplier) {
+    await this.redis.set('game:multiplier', multiplier);
+  }
+
+  async crashRound(finalMultiplier, cooldownDurationMs) {
+    await this.redis.set('game:phase', 'crashed');
+    await this.redis.set('game:multiplier', finalMultiplier);
+    await this.redis.set(
+      'game:cooldown_end_time',
+      Date.now() + cooldownDurationMs,
+    );
+    console.log(`[GameService] Crashed at ${finalMultiplier}`);
+  }
 }
 
 module.exports = GameService;
