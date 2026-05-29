@@ -8,7 +8,7 @@
     "dev:api_calls": "pnpm --filter backend api_calls",
     
     "dev:frontend": "pnpm --filter frontend dev",
-    "dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\" \"pnpm run dev:rounds\""
+    "dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\" \"pnpm run dev:rounds\" \"pnpm run dev:api_calls\""
   },
   "devDependencies": {
     "concurrently": "8.2.2"
