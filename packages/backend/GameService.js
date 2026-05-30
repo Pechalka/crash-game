@@ -183,6 +183,29 @@ class GameService {
     );
     console.log(`[GameService] Crashed at ${finalMultiplier}`);
   }
+
+  /// ---
+
+  async rollbackBetInternally(betId) {
+    const [roundId, userId] = betId.split(':');
+    if (!roundId || !userId) return false;
+
+    const betsKey = `round:${roundId}:bets`;
+    const betAmount = await this.redis.hGet(betsKey, userId);
+    if (!betAmount) return false;
+
+    const balanceKey = `user:${userId}:balance`;
+    // Исправлено: incrByFloat (camelCase, B большая)
+    await this.redis.incrByFloat(balanceKey, parseFloat(betAmount));
+
+    await this.redis.hDel(betsKey, userId);
+    await this.redis.del(`bet:${betId}`);
+
+    console.log(
+      `[rollbackBetInternally] Rolled back bet ${betId}, returned ${betAmount}`,
+    );
+    return true;
+  }
 }
 
 module.exports = GameService;

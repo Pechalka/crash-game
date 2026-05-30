@@ -19,8 +19,13 @@ const createBullQueue = (name) => {
     return new Queue(name, {
         redis:  process.env.REDIS_URL_BULL || 'redis://localhost:6379',
         defaultJobOptions: {
-            removeOnComplete: false,
-            removeOnFail: true, 
+            attempts: 3,
+            backoff: { type: 'exponential', delay: 1000 },
+            removeOnComplete: true,
+            removeOnFail: false,
+            
+            // removeOnComplete: false,
+            // removeOnFail: true, 
         }
     });
 }

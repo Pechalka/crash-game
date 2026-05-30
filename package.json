@@ -6,9 +6,11 @@
     "dev:backend": "pnpm --filter backend start",
     "dev:rounds": "pnpm --filter backend rounds",
     "dev:api_calls": "pnpm --filter backend api_calls",
+    "dev:mock": "pnpm --filter backend mock",
+    
     
     "dev:frontend": "pnpm --filter frontend dev",
-    "dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\" \"pnpm run dev:rounds\" \"pnpm run dev:api_calls\""
+    "dev": "concurrently \"pnpm run dev:backend\" \"pnpm run dev:frontend\" \"pnpm run dev:rounds\" \"pnpm run dev:api_calls\" \"pnpm run dev:mock\""
   },
   "devDependencies": {
     "concurrently": "8.2.2"
