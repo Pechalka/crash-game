@@ -14,6 +14,9 @@ importers:
 
   packages/backend:
     dependencies:
+      '@clickhouse/client':
+        specifier: ^1.19.0
+        version: 1.19.0
       '@socket.io/redis-adapter':
         specifier: ^8.3.0
         version: 8.3.0(socket.io-adapter@2.5.7)
@@ -149,6 +152,13 @@ packages:
   '@babel/types@7.29.7':
     resolution: {integrity: sha512-4zBIxpPzowiZpusoFkyGVwakdRJUyuH5PxQ/PrqghfdFWWasvnCdPfQXHrenDai+gyLARulZjZowCOj6fjT4pA==}
     engines: {node: '>=6.9.0'}
+
+  '@clickhouse/client-common@1.19.0':
+    resolution: {integrity: sha512-HHQw7MUt1aFquSlnoQhlRO8e7zhRw7rJZFNSYiHP2wxzEVeoI0cX8kKoTp+xlVySvFi8s0mAC3bi8D031xmIQg==}
+
+  '@clickhouse/client@1.19.0':
+    resolution: {integrity: sha512-R/35tIFZjwRyqtTN0cnlvd45zU+YREuQ/cnfi6c+KGGkVSCF+1cl8mZ9kkxshqHx2U4YjcmPVElJaRn2bEqJ4g==}
+    engines: {node: '>=16'}
 
   '@esbuild/android-arm64@0.18.20':
     resolution: {integrity: sha512-Nz4rJcchGDtENV0eMKUNa6L12zz2zBDXuhj/Vjh18zGqB44Bi7MBMSXjgunJgjRhCmKOjnPuZp4Mb6OKqtMHLQ==}
@@ -1195,6 +1205,12 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
+
+  '@clickhouse/client-common@1.19.0': {}
+
+  '@clickhouse/client@1.19.0':
+    dependencies:
+      '@clickhouse/client-common': 1.19.0
 
   '@esbuild/android-arm64@0.18.20':
     optional: true

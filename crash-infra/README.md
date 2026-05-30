@@ -17,3 +17,12 @@ docker-compose up -d
 cd infra
 docker-compose down -v   # удалит также данные (volumes)
 ```
+
+## База для логов
+
+создание базы и таблиц
+```bash
+cd packages/backend
+node init-clickhouse.js
+
+```
